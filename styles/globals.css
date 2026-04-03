@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --crimson-red: #e8162b;
+  --off-white: #f4f2ed;
+  --pitch-black: #0c0c0c;
+  --warm-white: #ffffff;
+  --muted-ink: #1c1c1c;
+  --red-dim: #2a0508;
+  --soft-border: rgba(28, 28, 28, 0.12);
+  --muted-copy: rgba(28, 28, 28, 0.72);
+  --muted-copy-dark: rgba(255, 255, 255, 0.7);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--off-white);
+  color: var(--muted-ink);
+  font-family: var(--font-body), sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  background: var(--crimson-red);
+  color: var(--warm-white);
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    margin: 0;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  a {
+    @apply transition-colors duration-300;
+  }
+}
+
+@layer components {
+  .section-shell {
+    @apply relative overflow-hidden;
+  }
+
+  .page-shell {
+    @apply mx-auto w-full max-w-[1320px] px-5 sm:px-8 lg:px-10;
+  }
+
+  .display-heading {
+    font-family: var(--font-display), sans-serif;
+    letter-spacing: 0.04em;
+    line-height: 0.92;
+    text-transform: uppercase;
+  }
+
+  .accent-script {
+    font-family: var(--font-accent), cursive;
+  }
+
+  .eyebrow {
+    @apply accent-script text-2xl tracking-wide;
+    color: var(--crimson-red);
+  }
+
+  .pill-button {
+    @apply inline-flex items-center justify-center rounded-full px-6 py-3 text-sm font-semibold tracking-[0.03em] transition-all duration-300;
+  }
+
+  .pill-button-primary {
+    @apply pill-button bg-crimson text-white hover:-translate-y-0.5 hover:bg-[#c81224];
+  }
+
+  .pill-button-secondary {
+    @apply pill-button border border-black/15 bg-transparent text-ink hover:-translate-y-0.5 hover:border-crimson hover:text-crimson;
+  }
+
+  .pill-outline-dark {
+    @apply pill-button border border-white/70 bg-transparent text-white hover:-translate-y-0.5 hover:border-crimson hover:bg-crimson;
+  }
+
+  .dot-grid-bg {
+    background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .ticker-mask {
+    @apply overflow-hidden whitespace-nowrap;
+  }
+
+  .ticker-track {
+    animation: marquee 20s linear infinite;
+  }
+
+  .sparkle {
+    animation: sparkleFloat 7s ease-in-out infinite;
+    transform-origin: center;
+  }
+
+  .text-muted {
+    color: var(--muted-copy);
+  }
+
+  .text-muted-dark {
+    color: var(--muted-copy-dark);
+  }
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes sparkleFloat {
+  0%,
+  100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-7px) rotate(5deg);
+  }
+}
