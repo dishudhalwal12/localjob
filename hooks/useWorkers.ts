@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToWorkers } from "@/lib/workers";
+import { getWorkers } from "@/lib/workers";
 import type { Worker, WorkerSkillFilter } from "@/types";
 
 interface UseWorkersOptions {
@@ -32,37 +32,53 @@ export function useWorkers({
   }, [search]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToWorkers(
-      (nextWorkers) => {
+    let active = true;
+
+    setLoading(true);
+
+    const loadWorkers = async () => {
+      try {
+        const nextWorkers = await getWorkers(limitCount, skill);
+
+        if (!active) {
+          return;
+        }
+
         setAllWorkers(nextWorkers);
-        setLoading(false);
         setError(null);
-      },
-      (subscriptionError) => {
-        setLoading(false);
-        setError(subscriptionError.message);
-      },
-      limitCount,
-    );
+      } catch (loadError) {
+        if (!active) {
+          return;
+        }
+
+        setAllWorkers([]);
+        setError(loadError instanceof Error ? loadError.message : "Unable to load workers.");
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadWorkers();
 
     return () => {
-      unsubscribe();
+      active = false;
     };
-  }, [limitCount]);
+  }, [limitCount, skill]);
 
   useEffect(() => {
     const normalizedSearch = debouncedSearch.trim().toLowerCase();
 
     const filteredWorkers = allWorkers.filter((worker) => {
-      const matchesSkill = skill === "All" || worker.skill === skill;
-      const matchesArea =
-        !normalizedSearch || worker.area.toLowerCase().includes(normalizedSearch);
+      const searchableArea = `${worker.area} ${worker.city}`.toLowerCase();
+      const matchesArea = !normalizedSearch || searchableArea.includes(normalizedSearch);
 
-      return matchesSkill && matchesArea;
+      return matchesArea;
     });
 
     setWorkers(filteredWorkers);
-  }, [allWorkers, debouncedSearch, skill]);
+  }, [allWorkers, debouncedSearch]);
 
   return {
     workers,

@@ -26,6 +26,7 @@ export const firebaseApp: FirebaseApp | null = isFirebaseConfigured
 export const db: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
 
 let authInstance: Auth | null = null;
+let authReadyPromise: Promise<Auth | null> | null = null;
 
 export function getFirebaseAuth() {
   if (!firebaseApp || typeof window === "undefined") {
@@ -34,8 +35,23 @@ export function getFirebaseAuth() {
 
   if (!authInstance) {
     authInstance = getAuth(firebaseApp);
-    void setPersistence(authInstance, browserLocalPersistence).catch(() => undefined);
   }
 
   return authInstance;
+}
+
+export async function ensureFirebaseAuth() {
+  const auth = getFirebaseAuth();
+
+  if (!auth) {
+    return null;
+  }
+
+  if (!authReadyPromise) {
+    authReadyPromise = setPersistence(auth, browserLocalPersistence)
+      .catch(() => undefined)
+      .then(() => auth);
+  }
+
+  return authReadyPromise;
 }

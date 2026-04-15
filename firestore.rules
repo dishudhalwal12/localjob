@@ -1,15 +1,42 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(workerId) {
+      return isSignedIn()
+        && request.auth.uid == workerId
+        && resource.data.userId == request.auth.uid;
+    }
+
+    function isOwnerCreate(workerId) {
+      return isSignedIn()
+        && request.auth.uid == workerId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.id == workerId
+        && request.resource.data.viewCount == 0;
+    }
+
+    function isPublicViewCountIncrement() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
+        && request.resource.data.viewCount == resource.data.viewCount + 1;
+    }
+
     match /workers/{workerId} {
       allow read: if true;
 
-      allow create: if request.auth != null
-        && request.resource.data.userId == request.auth.uid;
+      allow create: if isOwnerCreate(workerId);
 
-      allow update, delete: if request.auth != null
-        && resource.data.userId == request.auth.uid
-        && request.resource.data.userId == resource.data.userId;
+      allow update: if (
+          isOwner(workerId)
+          && request.resource.data.userId == resource.data.userId
+          && request.resource.data.id == resource.data.id
+        )
+        || isPublicViewCountIncrement();
+
+      allow delete: if isOwner(workerId);
     }
   }
 }

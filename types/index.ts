@@ -25,6 +25,7 @@ export interface Worker {
   available: boolean;
   userId: string;
   createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
   viewCount: number;
 }
 

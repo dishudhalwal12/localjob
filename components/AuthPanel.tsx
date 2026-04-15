@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import toast from "react-hot-toast";
-import { signInDemo, signUpDemo } from "@/lib/demo-auth";
+import { isFirebaseConfigured } from "@/lib/firebase";
+import { registerWorker, signInWorker } from "@/lib/auth";
 
 interface AuthPanelProps {
   onSuccess?: () => void;
@@ -26,11 +27,11 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
 
     try {
       if (tab === "login") {
-        await signInDemo(email.trim(), password);
-        toast.success("Signed in to demo mode.");
+        await signInWorker(email.trim(), password);
+        toast.success("Signed in successfully.");
       } else {
-        await signUpDemo(email.trim(), password);
-        toast.success("Demo account created.");
+        await registerWorker(email.trim(), password);
+        toast.success("Account created successfully.");
       }
 
       onSuccess?.();
@@ -41,6 +42,18 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
       setSubmitting(false);
     }
   };
+
+  if (!isFirebaseConfigured) {
+    return (
+      <div className="rounded-[24px] border border-crimson/20 bg-[#fff5f5] p-6 shadow-localjob">
+        <h2 className="text-2xl font-bold text-ink">Firebase setup missing</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">
+          Add your Firebase web app environment variables before workers can sign in and publish
+          listings.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-[24px] border border-black/10 bg-white p-6 shadow-localjob">
@@ -69,9 +82,6 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted">
           Only workers need an account. Visitors can browse freely without signing in.
-        </p>
-        <p className="mt-2 text-sm leading-6 text-crimson">
-          Demo mode: accounts are stored only in this browser.
         </p>
       </div>
 

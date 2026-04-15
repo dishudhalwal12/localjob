@@ -6,17 +6,18 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AuthPanel } from "@/components/AuthPanel";
 import { WorkerForm } from "@/components/WorkerForm";
-import { signOutDemo } from "@/lib/demo-auth";
-import { useDemoAuth } from "@/hooks/useDemoAuth";
+import { signOutUser } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 import { addWorker, getWorkerByUserId } from "@/lib/workers";
 import type { Worker, WorkerPayload } from "@/types";
 
 export default function ListYourselfPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useDemoAuth();
+  const { user, loading: authLoading } = useAuth();
   const [existingWorker, setExistingWorker] = useState<Worker | null>(null);
   const [checkingListing, setCheckingListing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [setupError, setSetupError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -24,6 +25,7 @@ export default function ListYourselfPage() {
     if (!user) {
       setExistingWorker(null);
       setCheckingListing(false);
+      setSetupError(null);
       return;
     }
 
@@ -38,12 +40,17 @@ export default function ListYourselfPage() {
         }
 
         setExistingWorker(listing);
+        setSetupError(null);
       } catch (error) {
         if (!active) {
           return;
         }
 
-        toast.error(error instanceof Error ? error.message : "Unable to check your listing.");
+        const message =
+          error instanceof Error ? error.message : "Unable to check your listing.";
+
+        setSetupError(message);
+        toast.error(message);
       } finally {
         if (active) {
           setCheckingListing(false);
@@ -65,13 +72,18 @@ export default function ListYourselfPage() {
     }
 
     setSubmitting(true);
+    setSetupError(null);
 
     try {
       await addWorker(values, user.uid);
+      setSetupError(null);
       toast.success("Your listing is live.");
       startTransition(() => router.push("/dashboard"));
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to save your listing.");
+      const message = error instanceof Error ? error.message : "Unable to save your listing.";
+
+      setSetupError(message);
+      toast.error(message);
     } finally {
       setSubmitting(false);
     }
@@ -90,10 +102,11 @@ export default function ListYourselfPage() {
       <section className="-mt-6">
         <div className="page-shell">
           <div className="mx-auto max-w-[580px] rounded-[24px] bg-white p-7 shadow-localjob sm:p-10">
-            <div className="mb-6 rounded-[18px] border border-crimson/15 bg-[#fff5f5] px-4 py-4 text-sm leading-6 text-ink">
-              Demo mode is active. Worker data and sign-ins are saved locally in this browser for
-              presentation purposes.
-            </div>
+            {setupError ? (
+              <div className="mb-6 rounded-[18px] border border-crimson/20 bg-[#fff5f5] px-4 py-4 text-sm leading-6 text-ink">
+                {setupError}
+              </div>
+            ) : null}
 
             {authLoading ? (
               <div className="space-y-4 animate-pulse">
@@ -123,8 +136,13 @@ export default function ListYourselfPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      void signOutDemo();
-                      toast.success("Signed out of demo mode.");
+                      void signOutUser()
+                        .then(() => {
+                          toast.success("Signed out successfully.");
+                        })
+                        .catch((error) => {
+                          toast.error(error instanceof Error ? error.message : "Unable to sign out.");
+                        });
                     }}
                     className="pill-button-secondary h-fit"
                   >
@@ -153,8 +171,13 @@ export default function ListYourselfPage() {
                   <button
                     type="button"
                     onClick={() => {
-                      void signOutDemo();
-                      toast.success("Signed out of demo mode.");
+                      void signOutUser()
+                        .then(() => {
+                          toast.success("Signed out successfully.");
+                        })
+                        .catch((error) => {
+                          toast.error(error instanceof Error ? error.message : "Unable to sign out.");
+                        });
                     }}
                     className="pill-button-secondary h-fit shrink-0"
                   >

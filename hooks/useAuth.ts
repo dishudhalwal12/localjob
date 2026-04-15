@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToDemoAuth, type DemoUser } from "@/lib/demo-auth";
+import type { User } from "firebase/auth";
+import { subscribeToAuth } from "@/lib/auth";
 
-export function useDemoAuth() {
-  const [user, setUser] = useState<DemoUser | null>(null);
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = subscribeToDemoAuth((nextUser) => {
+    const unsubscribe = subscribeToAuth((nextUser) => {
       setUser(nextUser);
       setLoading(false);
     });

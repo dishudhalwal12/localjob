@@ -5,8 +5,8 @@ import { startTransition, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { WorkerForm } from "@/components/WorkerForm";
-import { signOutDemo } from "@/lib/demo-auth";
-import { useDemoAuth } from "@/hooks/useDemoAuth";
+import { signOutUser } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
 import {
   deleteWorker,
   getWorkerByUserId,
@@ -38,7 +38,7 @@ function StatCard({
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useDemoAuth();
+  const { user, loading: authLoading } = useAuth();
   const [worker, setWorker] = useState<Worker | null>(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -187,7 +187,7 @@ export default function DashboardPage() {
         <header className="rounded-[28px] bg-white p-7 shadow-localjob sm:p-8">
           <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="eyebrow">demo dashboard</p>
+              <p className="eyebrow">worker dashboard</p>
               <h1 className="display-heading text-[clamp(4rem,9vw,6.2rem)] text-ink">
                 Your Listing
               </h1>
@@ -197,9 +197,14 @@ export default function DashboardPage() {
             <button
               type="button"
               onClick={() => {
-                void signOutDemo();
-                toast.success("Signed out of demo mode.");
-                startTransition(() => router.replace("/list-yourself"));
+                void signOutUser()
+                  .then(() => {
+                    toast.success("Signed out successfully.");
+                    startTransition(() => router.replace("/list-yourself"));
+                  })
+                  .catch((error) => {
+                    toast.error(error instanceof Error ? error.message : "Unable to sign out.");
+                  });
               }}
               className="pill-button-secondary h-fit"
             >

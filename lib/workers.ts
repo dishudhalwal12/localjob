@@ -1,298 +1,242 @@
-import { Timestamp } from "firebase/firestore";
-import type { Worker, WorkerPayload } from "@/types";
+import {
+  Timestamp,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  increment,
+  limit,
+  orderBy,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  type DocumentData,
+  type DocumentSnapshot,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
+} from "firebase/firestore";
+import { db, isFirebaseConfigured } from "@/lib/firebase";
+import type { Worker, WorkerPayload, WorkerSkillFilter } from "@/types";
 
-interface StoredWorker extends Omit<Worker, "createdAt"> {
-  createdAtMs: number;
+interface WorkerRecord extends WorkerPayload {
+  id: string;
+  userId: string;
+  createdAt: Timestamp | null;
+  updatedAt: Timestamp | null;
+  viewCount: number;
 }
 
-const WORKERS_STORAGE_KEY = "localjob-demo-workers";
-const WORKERS_EVENT = "localjob-demo-workers-change";
+const WORKERS_COLLECTION = "workers";
 
-const seededWorkers: StoredWorker[] = [
-  {
-    id: "worker-aman-electrician",
-    name: "Aman Verma",
-    skill: "Electrician",
-    area: "Rohini Sector 7",
-    city: "Delhi",
-    phone: "9876543210",
-    bio: "House wiring, switch board repair, inverter setup, and urgent same-day electrical fixes.",
-    experience: "8 years",
-    available: true,
-    userId: "seed-user-1",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 2,
-    viewCount: 143,
-  },
-  {
-    id: "worker-salim-plumber",
-    name: "Salim Khan",
-    skill: "Plumber",
-    area: "Laxmi Nagar",
-    city: "Delhi",
-    phone: "9811122233",
-    bio: "Pipe leak repair, bathroom fittings, motor line checks, and kitchen plumbing work.",
-    experience: "10 years",
-    available: true,
-    userId: "seed-user-2",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 5,
-    viewCount: 97,
-  },
-  {
-    id: "worker-rakesh-painter",
-    name: "Rakesh Painter",
-    skill: "Painter",
-    area: "Indirapuram",
-    city: "Ghaziabad",
-    phone: "9899001122",
-    bio: "Room repainting, wall putty, texture work, and quick fresh-coat jobs for flats and shops.",
-    experience: "6 years",
-    available: false,
-    userId: "seed-user-3",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 8,
-    viewCount: 82,
-  },
-  {
-    id: "worker-dev-carpenter",
-    name: "Dev Kumar",
-    skill: "Carpenter",
-    area: "Noida Sector 62",
-    city: "Noida",
-    phone: "9922334455",
-    bio: "Custom shelves, door repair, bed fitting, and modular furniture touch-up work.",
-    experience: "9 years",
-    available: true,
-    userId: "seed-user-4",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 12,
-    viewCount: 121,
-  },
-  {
-    id: "worker-jagdeep-mechanic",
-    name: "Jagdeep Singh",
-    skill: "Mechanic",
-    area: "Pitampura",
-    city: "Delhi",
-    phone: "9988776655",
-    bio: "Two-wheeler servicing, battery checks, puncture support, and roadside minor repairs.",
-    experience: "7 years",
-    available: true,
-    userId: "seed-user-5",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 18,
-    viewCount: 68,
-  },
-  {
-    id: "worker-rehana-tailor",
-    name: "Rehana Bano",
-    skill: "Tailor",
-    area: "Jamia Nagar",
-    city: "Delhi",
-    phone: "9797979797",
-    bio: "Women’s suits, blouse fitting, simple alterations, and urgent stitching for local customers.",
-    experience: "11 years",
-    available: true,
-    userId: "seed-user-6",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 22,
-    viewCount: 109,
-  },
-  {
-    id: "worker-harsh-ac",
-    name: "Harsh AC Care",
-    skill: "AC Technician",
-    area: "Dwarka Sector 10",
-    city: "Delhi",
-    phone: "9911007788",
-    bio: "AC servicing, cooling issues, gas refill checks, and split AC installation support.",
-    experience: "5 years",
-    available: false,
-    userId: "seed-user-7",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 30,
-    viewCount: 76,
-  },
-  {
-    id: "worker-meena-electrician",
-    name: "Meena Electric Works",
-    skill: "Electrician",
-    area: "Rohini Sector 11",
-    city: "Delhi",
-    phone: "9870011223",
-    bio: "Ceiling fan repair, lighting upgrades, and apartment electrical troubleshooting.",
-    experience: "4 years",
-    available: true,
-    userId: "seed-user-8",
-    createdAtMs: Date.now() - 1000 * 60 * 60 * 40,
-    viewCount: 58,
-  },
-];
+type FirestoreAction =
+  | "browse_workers"
+  | "read_worker"
+  | "read_own_listing"
+  | "create_worker"
+  | "update_worker"
+  | "update_availability"
+  | "delete_worker"
+  | "increment_view_count";
 
-function isBrowser() {
-  return typeof window !== "undefined";
+function getFirestoreUnavailableMessage() {
+  return isFirebaseConfigured
+    ? "Firestore is unavailable right now."
+    : "Firebase is not configured for this project.";
 }
 
-function toWorker(worker: StoredWorker): Worker {
-  return {
-    ...worker,
-    createdAt: Timestamp.fromMillis(worker.createdAtMs),
-  };
-}
-
-function readStoredWorkers() {
-  if (!isBrowser()) {
-    return [...seededWorkers];
+function requireDb() {
+  if (!db) {
+    throw new Error(getFirestoreUnavailableMessage());
   }
 
-  const rawWorkers = window.localStorage.getItem(WORKERS_STORAGE_KEY);
-
-  if (!rawWorkers) {
-    window.localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(seededWorkers));
-    return [...seededWorkers];
-  }
-
-  try {
-    const parsedWorkers = JSON.parse(rawWorkers) as StoredWorker[];
-
-    if (!Array.isArray(parsedWorkers)) {
-      window.localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(seededWorkers));
-      return [...seededWorkers];
-    }
-
-    return parsedWorkers;
-  } catch {
-    window.localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(seededWorkers));
-    return [...seededWorkers];
-  }
+  return db;
 }
 
-function sortWorkers(workers: StoredWorker[]) {
-  return [...workers].sort((left, right) => right.createdAtMs - left.createdAtMs);
+function workersCollection() {
+  return collection(requireDb(), WORKERS_COLLECTION);
 }
 
-function emitWorkersChange() {
-  if (!isBrowser()) {
-    return;
-  }
-
-  window.dispatchEvent(new CustomEvent(WORKERS_EVENT));
-}
-
-function writeStoredWorkers(workers: StoredWorker[]) {
-  if (!isBrowser()) {
-    return;
-  }
-
-  window.localStorage.setItem(WORKERS_STORAGE_KEY, JSON.stringify(sortWorkers(workers)));
-  emitWorkersChange();
-}
-
-function readWorkers(limitCount?: number) {
-  const workers = sortWorkers(readStoredWorkers());
-
-  return (limitCount ? workers.slice(0, limitCount) : workers).map(toWorker);
-}
-
-function createWorkerId() {
-  return `worker-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-export async function getWorkers(limitCount?: number) {
-  return readWorkers(limitCount);
-}
-
-export function subscribeToWorkers(
-  onData: (workers: Worker[]) => void,
-  onError: (error: Error) => void,
-  limitCount?: number,
+function toWorker(
+  snapshot: QueryDocumentSnapshot<DocumentData> | DocumentSnapshot<DocumentData>,
 ) {
-  try {
-    const handleUpdate = () => {
-      onData(readWorkers(limitCount));
-    };
+  if (!snapshot.exists()) {
+    return null;
+  }
 
-    handleUpdate();
+  const data = snapshot.data({ serverTimestamps: "estimate" }) as Partial<WorkerRecord>;
 
-    if (!isBrowser()) {
-      return () => undefined;
+  return {
+    id: snapshot.id,
+    userId: typeof data.userId === "string" ? data.userId : snapshot.id,
+    name: typeof data.name === "string" ? data.name : "",
+    skill: data.skill ?? "Electrician",
+    area: typeof data.area === "string" ? data.area : "",
+    city: typeof data.city === "string" ? data.city : "",
+    phone: typeof data.phone === "string" ? data.phone : "",
+    bio: typeof data.bio === "string" ? data.bio : "",
+    experience: typeof data.experience === "string" ? data.experience : "",
+    available: data.available ?? true,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt : null,
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : null,
+    viewCount: typeof data.viewCount === "number" ? data.viewCount : 0,
+  } satisfies Worker;
+}
+
+function sortWorkers(workers: Worker[]) {
+  return [...workers].sort(
+    (left, right) => (right.createdAt?.toMillis() ?? 0) - (left.createdAt?.toMillis() ?? 0),
+  );
+}
+
+function buildWorkersQuery(skill: WorkerSkillFilter = "All", limitCount?: number) {
+  const constraints: QueryConstraint[] = [];
+
+  if (skill === "All") {
+    constraints.push(orderBy("createdAt", "desc"));
+  } else {
+    constraints.push(where("skill", "==", skill));
+  }
+
+  if (limitCount) {
+    constraints.push(limit(limitCount));
+  }
+
+  return query(workersCollection(), ...constraints);
+}
+
+function getPermissionDeniedMessage(action: FirestoreAction) {
+  switch (action) {
+    case "browse_workers":
+    case "read_worker":
+      return "Firestore blocked public reads. Deploy the rules from firestore.rules to your Firebase project and try again.";
+    case "read_own_listing":
+      return "Firestore blocked the listing check. Deploy the rules from firestore.rules to your Firebase project, then reload this page.";
+    case "create_worker":
+      return "Firestore blocked the listing write. Open Firestore Rules in Firebase Console and publish this repo's firestore.rules, or run firebase deploy --only firestore:rules.";
+    case "update_worker":
+    case "update_availability":
+    case "delete_worker":
+      return "Firestore blocked this account from changing the listing. Make sure your published Firestore Rules match firestore.rules in this repo.";
+    case "increment_view_count":
+      return "Firestore blocked the profile view update. Publish this repo's firestore.rules to your Firebase project and try again.";
+    default:
+      return "Firestore denied this request.";
+  }
+}
+
+function getFirestoreErrorMessage(
+  error: unknown,
+  fallback: string,
+  action: FirestoreAction,
+) {
+  if (typeof error === "object" && error && "code" in error) {
+    const code = String(error.code);
+
+    if (code === "permission-denied") {
+      return getPermissionDeniedMessage(action);
     }
 
-    const handleStorage = (event: StorageEvent) => {
-      if (!event.key || event.key === WORKERS_STORAGE_KEY) {
-        handleUpdate();
-      }
-    };
+    if (code === "unavailable") {
+      return "Firestore is temporarily unavailable. Please try again.";
+    }
+  }
 
-    window.addEventListener(WORKERS_EVENT, handleUpdate);
-    window.addEventListener("storage", handleStorage);
+  return error instanceof Error ? error.message : fallback;
+}
 
-    return () => {
-      window.removeEventListener(WORKERS_EVENT, handleUpdate);
-      window.removeEventListener("storage", handleStorage);
-    };
+export async function getWorkers(limitCount?: number, skill: WorkerSkillFilter = "All") {
+  try {
+    const snapshot = await getDocs(buildWorkersQuery(skill, limitCount));
+    return sortWorkers(snapshot.docs.map((workerDoc) => toWorker(workerDoc)).filter(Boolean) as Worker[]);
   } catch (error) {
-    onError(error instanceof Error ? error : new Error("Unable to subscribe to workers."));
-    return () => undefined;
+    throw new Error(getFirestoreErrorMessage(error, "Unable to load workers.", "browse_workers"));
   }
 }
 
 export async function getWorkerById(id: string) {
-  const worker = readStoredWorkers().find((entry) => entry.id === id);
-  return worker ? toWorker(worker) : null;
+  try {
+    const snapshot = await getDoc(doc(requireDb(), WORKERS_COLLECTION, id));
+    return toWorker(snapshot);
+  } catch (error) {
+    throw new Error(getFirestoreErrorMessage(error, "Unable to load this worker.", "read_worker"));
+  }
 }
 
 export async function getWorkerByUserId(userId: string) {
-  const worker = readStoredWorkers().find((entry) => entry.userId === userId);
-  return worker ? toWorker(worker) : null;
+  try {
+    const snapshot = await getDoc(doc(requireDb(), WORKERS_COLLECTION, userId));
+    return toWorker(snapshot);
+  } catch (error) {
+    throw new Error(
+      getFirestoreErrorMessage(error, "Unable to check your listing.", "read_own_listing"),
+    );
+  }
 }
 
 export async function addWorker(worker: WorkerPayload, userId: string) {
-  const nextWorker: StoredWorker = {
-    ...worker,
-    id: createWorkerId(),
-    userId,
-    createdAtMs: Date.now(),
-    viewCount: 0,
-  };
+  try {
+    await setDoc(doc(requireDb(), WORKERS_COLLECTION, userId), {
+      ...worker,
+      id: userId,
+      userId,
+      viewCount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
 
-  writeStoredWorkers([nextWorker, ...readStoredWorkers()]);
-  return nextWorker.id;
+    return userId;
+  } catch (error) {
+    throw new Error(getFirestoreErrorMessage(error, "Unable to create your listing.", "create_worker"));
+  }
 }
 
 export async function updateWorker(id: string, worker: WorkerPayload) {
-  const workers = readStoredWorkers().map((entry) =>
-    entry.id === id
-      ? {
-          ...entry,
-          ...worker,
-        }
-      : entry,
-  );
-
-  writeStoredWorkers(workers);
+  try {
+    await updateDoc(doc(requireDb(), WORKERS_COLLECTION, id), {
+      ...worker,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new Error(getFirestoreErrorMessage(error, "Unable to update your listing.", "update_worker"));
+  }
 }
 
 export async function updateWorkerAvailability(id: string, available: boolean) {
-  const workers = readStoredWorkers().map((entry) =>
-    entry.id === id
-      ? {
-          ...entry,
-          available,
-        }
-      : entry,
-  );
-
-  writeStoredWorkers(workers);
+  try {
+    await updateDoc(doc(requireDb(), WORKERS_COLLECTION, id), {
+      available,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new Error(
+      getFirestoreErrorMessage(error, "Unable to update your status.", "update_availability"),
+    );
+  }
 }
 
 export async function deleteWorker(id: string) {
-  writeStoredWorkers(readStoredWorkers().filter((entry) => entry.id !== id));
+  try {
+    await deleteDoc(doc(requireDb(), WORKERS_COLLECTION, id));
+  } catch (error) {
+    throw new Error(getFirestoreErrorMessage(error, "Unable to delete your listing.", "delete_worker"));
+  }
 }
 
 export async function incrementViewCount(id: string) {
-  const workers = readStoredWorkers().map((entry) =>
-    entry.id === id
-      ? {
-          ...entry,
-          viewCount: entry.viewCount + 1,
-        }
-      : entry,
-  );
-
-  writeStoredWorkers(workers);
+  try {
+    await updateDoc(doc(requireDb(), WORKERS_COLLECTION, id), {
+      viewCount: increment(1),
+    });
+  } catch (error) {
+    throw new Error(
+      getFirestoreErrorMessage(
+        error,
+        "Unable to update the profile view count.",
+        "increment_view_count",
+      ),
+    );
+  }
 }
