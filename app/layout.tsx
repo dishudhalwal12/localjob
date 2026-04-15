@@ -34,6 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-scroll-behavior="smooth"
       className={`${bebasNeue.variable} ${plusJakartaSans.variable} ${caveat.variable}`}
     >
       <body className="min-h-screen bg-offwhite font-body text-ink antialiased">
