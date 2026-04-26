@@ -55,7 +55,6 @@ export default function DashboardPage() {
     if (authLoading) return;
 
     if (!user) {
-      setWorker(null);
       setLoading(false);
       startTransition(() => router.replace("/login"));
       return;

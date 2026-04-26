@@ -8,6 +8,7 @@ import { getUserProfile } from "@/lib/users";
 import type { Chat } from "@/types";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useUser } from "@/components/UserProvider";
 
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
   const [chats, setChats] = useState<(Chat & { otherUser?: { name: string } })[]>([]);
