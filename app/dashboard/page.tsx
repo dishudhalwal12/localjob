@@ -41,7 +41,7 @@ function StatCard({
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const { workerProfile: worker, refreshWorker } = useUser();
+  const { workerProfile: worker, role, refreshWorker } = useUser();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,12 +81,15 @@ export default function DashboardPage() {
 
     if (worker) void loadData();
     else if (!authLoading && !worker) {
-       // Only show error if we are sure they don't have a listing
-       setLoading(false);
+      setLoading(false);
+      // Redirect to onboarding if they are a worker but have no listing yet
+      if (role === "worker") {
+        router.replace("/list-yourself");
+      }
     }
 
     return () => { active = false; };
-  }, [authLoading, worker]);
+  }, [authLoading, worker, role, router]);
 
   const handleBookingStatus = async (bookingId: string, status: any) => {
     try {

@@ -6,76 +6,24 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AuthPanel } from "@/components/AuthPanel";
 import { WorkerForm } from "@/components/WorkerForm";
-import { signOutUser, subscribeToAuth } from "@/lib/auth";
-import { useUserRole } from "@/hooks/useUserRole";
-import { addWorker, getWorkerByUserId } from "@/lib/workers";
-import type { Worker, WorkerPayload } from "@/types";
+import { signOutUser } from "@/lib/auth";
+import { useAuth } from "@/hooks/useAuth";
+import { useUser } from "@/components/UserProvider";
+import { addWorker } from "@/lib/workers";
+import type { WorkerPayload } from "@/types";
 
 export default function ListYourselfPage() {
   const router = useRouter();
-  const { role, loading: authLoading } = useUserRole();
-  const [user, setUser] = useState<any>(null);
-
-  useEffect(() => {
-    const unsubscribe = subscribeToAuth((u) => setUser(u));
-    return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    if (!authLoading && role === "customer") {
-      router.replace("/find");
-    }
-  }, [role, authLoading, router]);
-  const [existingWorker, setExistingWorker] = useState<Worker | null>(null);
-  const [checkingListing, setCheckingListing] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const { role, workerProfile: existingWorker, loading: userLoading, refreshWorker } = useUser();
   const [submitting, setSubmitting] = useState(false);
   const [setupError, setSetupError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
-
-    if (!user) {
-      setExistingWorker(null);
-      setCheckingListing(false);
-      setSetupError(null);
-      return;
+    if (!authLoading && !userLoading && role === "customer") {
+      router.replace("/find");
     }
-
-    const loadListing = async () => {
-      setCheckingListing(true);
-
-      try {
-        const listing = await getWorkerByUserId(user.uid);
-
-        if (!active) {
-          return;
-        }
-
-        setExistingWorker(listing);
-        setSetupError(null);
-      } catch (error) {
-        if (!active) {
-          return;
-        }
-
-        const message =
-          error instanceof Error ? error.message : "Unable to check your listing.";
-
-        setSetupError(message);
-        toast.error(message);
-      } finally {
-        if (active) {
-          setCheckingListing(false);
-        }
-      }
-    };
-
-    void loadListing();
-
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  }, [role, authLoading, userLoading, router]);
 
   const handleCreate = async (values: WorkerPayload) => {
     if (!user) {
@@ -88,12 +36,11 @@ export default function ListYourselfPage() {
 
     try {
       await addWorker(values, user.uid);
-      setSetupError(null);
+      await refreshWorker();
       toast.success("Your listing is live.");
       startTransition(() => router.push("/dashboard"));
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to save your listing.";
-
       setSetupError(message);
       toast.error(message);
     } finally {
@@ -120,7 +67,7 @@ export default function ListYourselfPage() {
               </div>
             ) : null}
 
-            {authLoading ? (
+            {authLoading || userLoading ? (
               <div className="space-y-4 animate-pulse">
                 <div className="h-6 w-48 rounded-full bg-[#f0ece7]" />
                 <div className="h-12 rounded-2xl bg-[#f0ece7]" />
@@ -129,13 +76,6 @@ export default function ListYourselfPage() {
               </div>
             ) : !user ? (
               <AuthPanel />
-            ) : checkingListing ? (
-              <div className="space-y-4 animate-pulse">
-                <div className="h-6 w-44 rounded-full bg-[#f0ece7]" />
-                <div className="h-12 rounded-2xl bg-[#f0ece7]" />
-                <div className="h-12 rounded-2xl bg-[#f0ece7]" />
-                <div className="h-40 rounded-3xl bg-[#f0ece7]" />
-              </div>
             ) : existingWorker ? (
               <div className="rounded-[24px] border border-black/10 bg-[#f9f7f3] p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
