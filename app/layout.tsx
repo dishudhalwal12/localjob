@@ -26,6 +26,8 @@ export const metadata: Metadata = {
     "Find nearby daily wage workers by skill and area. No middlemen, no app fees, just direct local contact.",
 };
 
+import { UserProvider } from "@/components/UserProvider";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,11 +40,13 @@ export default function RootLayout({
       className={`${bebasNeue.variable} ${plusJakartaSans.variable} ${caveat.variable}`}
     >
       <body className="min-h-screen bg-offwhite font-body text-ink antialiased">
-        <div className="flex min-h-screen flex-col">
-          <Navbar />
-          <main className="flex-1">{children}</main>
-        </div>
-        <ToasterProvider />
+        <UserProvider>
+          <div className="flex min-h-screen flex-col">
+            <Navbar />
+            <main className="flex-1">{children}</main>
+          </div>
+          <ToasterProvider />
+        </UserProvider>
       </body>
     </html>
   );

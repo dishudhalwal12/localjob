@@ -1,63 +1,56 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { subscribeToUserChats } from "@/lib/chats";
 import { subscribeToAuth } from "@/lib/auth";
 import { getWorkerById } from "@/lib/workers";
 import { getUserProfile } from "@/lib/users";
-import type { Chat, Worker, User } from "@/types";
+import type { Chat } from "@/types";
 import Link from "next/link";
-import { useParams, usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 
 export default function MessagesLayout({ children }: { children: React.ReactNode }) {
   const [chats, setChats] = useState<(Chat & { otherUser?: { name: string } })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
-  const { chatId } = useParams<{ chatId: string }>();
-  const pathname = usePathname();
+  const { userId, loading: userLoading } = useUser();
+  const params = useParams();
+  const activeChatId = params?.chatId;
 
   useEffect(() => {
-    const unsubscribeAuth = subscribeToAuth((user: any) => {
-      if (user) {
-        setUserId(user.uid);
-        const unsubscribeChats = subscribeToUserChats(
-          user.uid,
-          async (userChats) => {
-            try {
-              const enrichedChats = await Promise.all(
-                userChats.map(async (chat) => {
-                  const otherUserId = chat.participants.find((p) => p !== user.uid);
-                  if (!otherUserId) return { ...chat };
+    if (!userId) return;
 
-                  try {
-                    const worker = await getWorkerById(otherUserId);
-                    if (worker) return { ...chat, otherUser: worker };
+    const unsubscribeChats = subscribeToUserChats(
+      userId,
+      async (userChats) => {
+        try {
+          const enrichedChats = await Promise.all(
+            userChats.map(async (chat) => {
+              const otherUserId = chat.participants.find((p) => p !== userId);
+              if (!otherUserId) return { ...chat };
 
-                    const profile = await getUserProfile(otherUserId);
-                    if (profile) return { ...chat, otherUser: { name: profile.email.split("@")[0] } };
-                  } catch (err) {
-                    console.error("Profile fetch error:", err);
-                  }
-                  return { ...chat, otherUser: { name: "User" } };
-                })
-              );
-              setChats(enrichedChats.sort((a, b) => (b.updatedAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || 0)));
-              setLoading(false);
-            } catch (e) {
-              setLoading(false);
-            }
-          }
-        );
-        return () => unsubscribeChats();
-      } else {
-        setLoading(false);
+              try {
+                const worker = await getWorkerById(otherUserId);
+                if (worker) return { ...chat, otherUser: worker };
+
+                const profile = await getUserProfile(otherUserId);
+                if (profile) return { ...chat, otherUser: { name: profile.email.split("@")[0] } };
+              } catch (err) {
+                console.error("Profile fetch error:", err);
+              }
+              return { ...chat, otherUser: { name: "User" } };
+            })
+          );
+          setChats(enrichedChats.sort((a, b) => (b.updatedAt?.toMillis() || 0) - (a.updatedAt?.toMillis() || 0)));
+          setLoading(false);
+        } catch (e) {
+          setLoading(false);
+        }
       }
-    });
+    );
+    return () => unsubscribeChats();
+  }, [userId]);
 
-    return () => unsubscribeAuth();
-  }, []);
-
-  if (!userId && !loading) {
+  if (!userId && !userLoading && !loading) {
     return <div className="p-20 text-center">Please log in to view messages.</div>;
   }
 
@@ -75,7 +68,7 @@ export default function MessagesLayout({ children }: { children: React.ReactNode
           ) : (
             <div className="divide-y divide-black/5">
               {chats.map((chat) => {
-                const isActive = chatId === chat.id;
+                const isActive = activeChatId === chat.id;
                 return (
                   <Link 
                     key={chat.id} 

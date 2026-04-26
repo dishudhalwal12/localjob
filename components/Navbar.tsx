@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CloseIcon, MenuIcon } from "@/components/Icons";
-import { useUserRole } from "@/hooks/useUserRole";
+import { useUser } from "@/components/UserProvider";
 import { signOutUser } from "@/lib/auth";
 import toast from "react-hot-toast";
 
@@ -15,7 +15,7 @@ function isActivePath(pathname: string, href: string) {
 export function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
-  const { role, loading } = useUserRole();
+  const { role, loading } = useUser();
 
   const getNavLinks = () => {
     const base = [{ href: "/find", label: "Find Workers" }];

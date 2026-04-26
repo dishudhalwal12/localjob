@@ -10,12 +10,12 @@ import { useAuth } from "@/hooks/useAuth";
 import { getWorkerBookings, updateBookingStatus } from "@/lib/bookings";
 import {
   deleteWorker,
-  getWorkerByUserId,
   updateWorker,
   updateWorkerAvailability,
 } from "@/lib/workers";
 import { getWorkerReviews } from "@/lib/reviews";
 import type { Worker, WorkerPayload, Booking } from "@/types";
+import { useUser } from "@/components/UserProvider";
 
 function StatCard({
   label,
@@ -41,7 +41,7 @@ function StatCard({
 export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [worker, setWorker] = useState<Worker | null>(null);
+  const { workerProfile: worker, refreshWorker } = useUser();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -62,20 +62,12 @@ export default function DashboardPage() {
     }
 
     const loadData = async () => {
+      if (!worker) return;
       setLoading(true);
       try {
-        const listing = await getWorkerByUserId(user.uid);
-        if (!active) return;
-        if (!listing) {
-          toast.error("Create your listing first.");
-          startTransition(() => router.replace("/list-yourself"));
-          return;
-        }
-        setWorker(listing);
-        
         const [workerBookings, workerReviews] = await Promise.all([
-          getWorkerBookings(listing.userId),
-          getWorkerReviews(listing.userId),
+          getWorkerBookings(worker.userId),
+          getWorkerReviews(worker.userId),
         ]);
         
         setBookings(workerBookings.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
@@ -88,9 +80,14 @@ export default function DashboardPage() {
       }
     };
 
-    void loadData();
+    if (worker) void loadData();
+    else if (!authLoading && !worker) {
+       // Only show error if we are sure they don't have a listing
+       setLoading(false);
+    }
+
     return () => { active = false; };
-  }, [authLoading, router, user]);
+  }, [authLoading, worker]);
 
   const handleBookingStatus = async (bookingId: string, status: any) => {
     try {
@@ -107,7 +104,7 @@ export default function DashboardPage() {
     setSaving(true);
     try {
       await updateWorker(worker.id, values);
-      setWorker((current) => (current ? { ...current, ...values } : current));
+      await refreshWorker();
       setEditing(false);
       toast.success("Listing updated.");
     } catch (error) {
@@ -120,12 +117,11 @@ export default function DashboardPage() {
   const handleAvailabilityToggle = async () => {
     if (!worker) return;
     const nextValue = !worker.available;
-    setWorker((current) => (current ? { ...current, available: nextValue } : current));
     try {
       await updateWorkerAvailability(worker.id, nextValue);
+      await refreshWorker();
       toast.success(nextValue ? "Marked as available." : "Marked as busy.");
     } catch (error) {
-      setWorker((current) => (current ? { ...current, available: !nextValue } : current));
       toast.error(error instanceof Error ? error.message : "Unable to change status.");
     }
   };
