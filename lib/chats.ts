@@ -35,16 +35,17 @@ export async function createOrGetChat(participant1: string, participant2: string
     return existingChat.id;
   }
 
-  const chatId = [participant1, participant2].sort().join("_");
+  const participants = [participant1, participant2].sort();
+  const chatId = participants.join("_");
   const chatRef = doc(db, CHATS_COLLECTION, chatId);
   
   await setDoc(chatRef, {
     id: chatId,
-    participants: [participant1, participant2],
+    participants,
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     lastMessage: "",
-  });
+  }, { merge: true });
 
   return chatId;
 }

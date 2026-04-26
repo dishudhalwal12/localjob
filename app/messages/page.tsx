@@ -28,13 +28,17 @@ export default function InboxPage() {
                     const otherUserId = chat.participants.find((p) => p !== user.uid);
                     if (!otherUserId) return { ...chat };
 
-                    // Try to find as worker first
-                    const worker = await getWorkerById(otherUserId);
-                    if (worker) return { ...chat, otherUser: worker };
+                    try {
+                      // Try to find as worker first
+                      const worker = await getWorkerById(otherUserId);
+                      if (worker) return { ...chat, otherUser: worker };
 
-                    // If not a worker, try to find as a regular user (customer)
-                    const profile = await getUserProfile(otherUserId);
-                    if (profile) return { ...chat, otherUser: { name: profile.email.split("@")[0] } };
+                      // If not a worker, try to find as a regular user (customer)
+                      const profile = await getUserProfile(otherUserId);
+                      if (profile) return { ...chat, otherUser: { name: profile.email.split("@")[0] } };
+                    } catch (err) {
+                      console.error("Profile fetch error for:", otherUserId, err);
+                    }
 
                     return { ...chat, otherUser: { name: "User" } };
                   })
