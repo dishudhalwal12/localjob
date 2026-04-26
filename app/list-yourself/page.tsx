@@ -6,14 +6,26 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { AuthPanel } from "@/components/AuthPanel";
 import { WorkerForm } from "@/components/WorkerForm";
-import { signOutUser } from "@/lib/auth";
-import { useAuth } from "@/hooks/useAuth";
+import { signOutUser, subscribeToAuth } from "@/lib/auth";
+import { useUserRole } from "@/hooks/useUserRole";
 import { addWorker, getWorkerByUserId } from "@/lib/workers";
 import type { Worker, WorkerPayload } from "@/types";
 
 export default function ListYourselfPage() {
   const router = useRouter();
-  const { user, loading: authLoading } = useAuth();
+  const { role, loading: authLoading } = useUserRole();
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((u) => setUser(u));
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!authLoading && role === "customer") {
+      router.replace("/find");
+    }
+  }, [role, authLoading, router]);
   const [existingWorker, setExistingWorker] = useState<Worker | null>(null);
   const [checkingListing, setCheckingListing] = useState(false);
   const [submitting, setSubmitting] = useState(false);

@@ -66,7 +66,12 @@ function toWorker(
     return null;
   }
 
-  const data = snapshot.data({ serverTimestamps: "estimate" }) as Partial<WorkerRecord>;
+  const data = snapshot.data({ serverTimestamps: "estimate" }) as Partial<WorkerRecord & { 
+    approvalStatus?: "pending" | "approved" | "rejected";
+    rating?: number;
+    reviewCount?: number;
+    packages?: any[];
+  }>;
 
   return {
     id: snapshot.id,
@@ -82,6 +87,10 @@ function toWorker(
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt : null,
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt : null,
     viewCount: typeof data.viewCount === "number" ? data.viewCount : 0,
+    approvalStatus: data.approvalStatus ?? "pending",
+    rating: data.rating ?? 0,
+    reviewCount: data.reviewCount ?? 0,
+    packages: data.packages ?? [],
   } satisfies Worker;
 }
 
@@ -91,13 +100,23 @@ function sortWorkers(workers: Worker[]) {
   );
 }
 
-function buildWorkersQuery(skill: WorkerSkillFilter = "All", limitCount?: number) {
+function buildWorkersQuery(
+  skill: WorkerSkillFilter = "All", 
+  limitCount?: number, 
+  includeUnapproved: boolean = false
+) {
   const constraints: QueryConstraint[] = [];
+
+  // In development/initial phase, show all workers regardless of status
+  // if (!includeUnapproved) {
+  //   constraints.push(where("approvalStatus", "==", "approved"));
+  // }
 
   if (skill === "All") {
     constraints.push(orderBy("createdAt", "desc"));
   } else {
     constraints.push(where("skill", "==", skill));
+    constraints.push(orderBy("createdAt", "desc"));
   }
 
   if (limitCount) {
@@ -147,9 +166,13 @@ function getFirestoreErrorMessage(
   return error instanceof Error ? error.message : fallback;
 }
 
-export async function getWorkers(limitCount?: number, skill: WorkerSkillFilter = "All") {
+export async function getWorkers(
+  limitCount?: number, 
+  skill: WorkerSkillFilter = "All",
+  includeUnapproved: boolean = false
+) {
   try {
-    const snapshot = await getDocs(buildWorkersQuery(skill, limitCount));
+    const snapshot = await getDocs(buildWorkersQuery(skill, limitCount, includeUnapproved));
     return sortWorkers(snapshot.docs.map((workerDoc) => toWorker(workerDoc)).filter(Boolean) as Worker[]);
   } catch (error) {
     throw new Error(getFirestoreErrorMessage(error, "Unable to load workers.", "browse_workers"));
@@ -183,6 +206,10 @@ export async function addWorker(worker: WorkerPayload, userId: string) {
       id: userId,
       userId,
       viewCount: 0,
+      approvalStatus: "approved",
+      rating: 0,
+      reviewCount: 0,
+      packages: worker.packages || [],
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
@@ -201,6 +228,17 @@ export async function updateWorker(id: string, worker: WorkerPayload) {
     });
   } catch (error) {
     throw new Error(getFirestoreErrorMessage(error, "Unable to update your listing.", "update_worker"));
+  }
+}
+
+export async function updateWorkerApprovalStatus(id: string, status: "approved" | "rejected") {
+  try {
+    await updateDoc(doc(requireDb(), WORKERS_COLLECTION, id), {
+      approvalStatus: status,
+      updatedAt: serverTimestamp(),
+    });
+  } catch (error) {
+    throw new Error(getFirestoreErrorMessage(error, "Unable to update approval status.", "update_worker"));
   }
 }
 

@@ -6,6 +6,8 @@ import {
   type User,
 } from "firebase/auth";
 import { ensureFirebaseAuth, getFirebaseAuth, isFirebaseConfigured } from "@/lib/firebase";
+import { createUserProfile, ensureUserProfile } from "./users";
+import type { UserRole } from "@/types";
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -50,7 +52,7 @@ function getFriendlyAuthError(error: unknown) {
   }
 }
 
-export async function registerWorker(email: string, password: string) {
+export async function registerWorker(email: string, password: string, role: UserRole = "customer") {
   try {
     const auth = await requireFirebaseAuth();
     const credential = await createUserWithEmailAndPassword(
@@ -58,6 +60,9 @@ export async function registerWorker(email: string, password: string) {
       normalizeEmail(email),
       password,
     );
+
+    // Create user profile in Firestore
+    await createUserProfile(credential.user.uid, credential.user.email!, role);
 
     return credential.user;
   } catch (error) {
@@ -69,6 +74,9 @@ export async function signInWorker(email: string, password: string) {
   try {
     const auth = await requireFirebaseAuth();
     const credential = await signInWithEmailAndPassword(auth, normalizeEmail(email), password);
+
+    // Ensure user profile exists (in case it wasn't created during registration or for existing users)
+    await ensureUserProfile(credential.user.uid, credential.user.email!);
 
     return credential.user;
   } catch (error) {

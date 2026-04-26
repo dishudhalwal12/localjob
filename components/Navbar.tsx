@@ -4,12 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CloseIcon, MenuIcon } from "@/components/Icons";
-
-const navLinks = [
-  { href: "/find", label: "Find Workers" },
-  { href: "/list-yourself", label: "List Yourself" },
-  { href: "/dashboard", label: "Dashboard" },
-];
+import { useUserRole } from "@/hooks/useUserRole";
+import { signOutUser } from "@/lib/auth";
+import toast from "react-hot-toast";
 
 function isActivePath(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -18,6 +15,30 @@ function isActivePath(pathname: string, href: string) {
 export function Navbar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { role, loading } = useUserRole();
+
+  const getNavLinks = () => {
+    const base = [{ href: "/find", label: "Find Workers" }];
+    
+    if (role === "worker") {
+      base.push({ href: "/dashboard", label: "Worker Panel" });
+      base.push({ href: "/messages", label: "Messages" });
+    } else if (role === "customer") {
+      base.push({ href: "/dashboard/customer", label: "My Bookings" });
+      base.push({ href: "/messages", label: "Messages" });
+    } else {
+      // Guest links
+      base.push({ href: "/list-yourself", label: "List Yourself" });
+    }
+
+    if (role === "admin") {
+      base.push({ href: "/admin", label: "Admin Panel" });
+    }
+
+    return base;
+  };
+
+  const allLinks = getNavLinks();
 
   useEffect(() => {
     setIsOpen(false);
@@ -31,7 +52,7 @@ export function Navbar() {
         </Link>
 
         <nav className="hidden items-center gap-7 md:flex">
-          {navLinks.map((link) => {
+          {allLinks.map((link) => {
             const active = isActivePath(pathname, link.href);
 
             return (
@@ -51,6 +72,17 @@ export function Navbar() {
               </Link>
             );
           })}
+
+          {!loading && !role ? (
+            <Link href="/login" className="pill-button-primary px-5 py-2 text-sm">Login</Link>
+          ) : !loading && role ? (
+            <button 
+              onClick={() => signOutUser().then(() => toast.success("Signed out"))}
+              className="text-sm font-bold text-ink hover:text-crimson"
+            >
+              Sign Out
+            </button>
+          ) : null}
         </nav>
 
         <button
@@ -71,7 +103,7 @@ export function Navbar() {
       >
         <div className="page-shell flex h-full flex-col justify-between py-10">
           <div className="space-y-5">
-            {navLinks.map((link) => {
+            {allLinks.map((link) => {
               const active = isActivePath(pathname, link.href);
 
               return (
@@ -88,7 +120,20 @@ export function Navbar() {
             })}
           </div>
 
-          <p className="max-w-xs text-sm text-white/65">
+          <div className="mt-8 flex flex-col gap-4">
+            {!loading && !role ? (
+              <Link href="/login" className="pill-button-primary w-full justify-center py-4 text-lg">Login / Sign Up</Link>
+            ) : !loading && role ? (
+              <button 
+                onClick={() => signOutUser().then(() => toast.success("Signed out"))}
+                className="text-left text-2xl font-bold text-white/50 hover:text-crimson"
+              >
+                Sign Out
+              </button>
+            ) : null}
+          </div>
+
+          <p className="max-w-xs text-sm text-white/65 mt-auto">
             Find nearby workers, list yourself for free, and manage your own profile without any
             middlemen.
           </p>

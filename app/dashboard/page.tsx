@@ -7,13 +7,15 @@ import toast from "react-hot-toast";
 import { WorkerForm } from "@/components/WorkerForm";
 import { signOutUser } from "@/lib/auth";
 import { useAuth } from "@/hooks/useAuth";
+import { getWorkerBookings, updateBookingStatus } from "@/lib/bookings";
 import {
   deleteWorker,
   getWorkerByUserId,
   updateWorker,
   updateWorkerAvailability,
 } from "@/lib/workers";
-import type { Worker, WorkerPayload } from "@/types";
+import { getWorkerReviews } from "@/lib/reviews";
+import type { Worker, WorkerPayload, Booking } from "@/types";
 
 function StatCard({
   label,
@@ -40,6 +42,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const { user, loading: authLoading } = useAuth();
   const [worker, setWorker] = useState<Worker | null>(null);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -48,61 +52,59 @@ export default function DashboardPage() {
   useEffect(() => {
     let active = true;
 
-    if (authLoading) {
-      return;
-    }
+    if (authLoading) return;
 
     if (!user) {
       setWorker(null);
       setLoading(false);
-      startTransition(() => router.replace("/list-yourself"));
+      startTransition(() => router.replace("/login"));
       return;
     }
 
-    const loadWorker = async () => {
+    const loadData = async () => {
       setLoading(true);
-
       try {
         const listing = await getWorkerByUserId(user.uid);
-
-        if (!active) {
-          return;
-        }
-
+        if (!active) return;
         if (!listing) {
           toast.error("Create your listing first.");
           startTransition(() => router.replace("/list-yourself"));
           return;
         }
-
         setWorker(listing);
+        
+        const [workerBookings, workerReviews] = await Promise.all([
+          getWorkerBookings(listing.userId),
+          getWorkerReviews(listing.userId),
+        ]);
+        
+        setBookings(workerBookings.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
+        setReviews(workerReviews.sort((a, b) => (b.createdAt?.toMillis() || 0) - (a.createdAt?.toMillis() || 0)));
       } catch (error) {
-        if (!active) {
-          return;
-        }
-
+        if (!active) return;
         toast.error(error instanceof Error ? error.message : "Unable to load your dashboard.");
       } finally {
-        if (active) {
-          setLoading(false);
-        }
+        if (active) setLoading(false);
       }
     };
 
-    void loadWorker();
-
-    return () => {
-      active = false;
-    };
+    void loadData();
+    return () => { active = false; };
   }, [authLoading, router, user]);
 
-  const handleUpdate = async (values: WorkerPayload) => {
-    if (!worker) {
-      return;
+  const handleBookingStatus = async (bookingId: string, status: any) => {
+    try {
+      await updateBookingStatus(bookingId, status);
+      setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status } : b));
+      toast.success(`Booking ${status}.`);
+    } catch (error) {
+      toast.error("Failed to update booking.");
     }
+  };
 
+  const handleUpdate = async (values: WorkerPayload) => {
+    if (!worker) return;
     setSaving(true);
-
     try {
       await updateWorker(worker.id, values);
       setWorker((current) => (current ? { ...current, ...values } : current));
@@ -116,14 +118,9 @@ export default function DashboardPage() {
   };
 
   const handleAvailabilityToggle = async () => {
-    if (!worker) {
-      return;
-    }
-
+    if (!worker) return;
     const nextValue = !worker.available;
-
     setWorker((current) => (current ? { ...current, available: nextValue } : current));
-
     try {
       await updateWorkerAvailability(worker.id, nextValue);
       toast.success(nextValue ? "Marked as available." : "Marked as busy.");
@@ -134,12 +131,8 @@ export default function DashboardPage() {
   };
 
   const handleDelete = async () => {
-    if (!worker) {
-      return;
-    }
-
+    if (!worker) return;
     setSaving(true);
-
     try {
       await deleteWorker(worker.id);
       toast.success("Listing deleted.");
@@ -152,10 +145,7 @@ export default function DashboardPage() {
     }
   };
 
-  if (!authLoading && !user) {
-    return null;
-  }
-
+  if (!authLoading && !user) return null;
   if (authLoading || loading) {
     return (
       <div className="bg-offwhite py-16">
@@ -177,9 +167,7 @@ export default function DashboardPage() {
     );
   }
 
-  if (!worker) {
-    return null;
-  }
+  if (!worker) return null;
 
   return (
     <div className="bg-offwhite py-12 pb-16 sm:py-14 sm:pb-20">
@@ -189,37 +177,35 @@ export default function DashboardPage() {
             <div>
               <p className="eyebrow">worker dashboard</p>
               <h1 className="display-heading text-[clamp(4rem,9vw,6.2rem)] text-ink">
-                Your Listing
+                {worker.name}
               </h1>
-              <p className="mt-2 text-lg text-muted">{user?.email ?? worker.name}</p>
+              <p className="mt-2 text-lg text-muted">{user?.email}</p>
             </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                void signOutUser()
-                  .then(() => {
-                    toast.success("Signed out successfully.");
-                    startTransition(() => router.replace("/list-yourself"));
-                  })
-                  .catch((error) => {
-                    toast.error(error instanceof Error ? error.message : "Unable to sign out.");
-                  });
-              }}
-              className="pill-button-secondary h-fit"
-            >
-              Sign Out
-            </button>
+            <div className="flex gap-3">
+              <Link href="/dashboard/customer" className="pill-button-secondary">Switch to Customer</Link>
+              <button
+                type="button"
+                onClick={() => {
+                  void signOutUser()
+                    .then(() => {
+                      toast.success("Signed out successfully.");
+                      startTransition(() => router.replace("/list-yourself"));
+                    })
+                    .catch((error) => {
+                      toast.error(error instanceof Error ? error.message : "Unable to sign out.");
+                    });
+                }}
+                className="pill-button-secondary h-fit"
+              >
+                Sign Out
+              </button>
+            </div>
           </div>
         </header>
 
         <section className="mt-6 grid gap-5 md:grid-cols-3">
           <StatCard label="Profile Views" value={worker.viewCount} />
-          <StatCard label="Your Skill">
-            <span className="inline-flex rounded-full bg-crimson px-4 py-2 text-sm font-semibold uppercase tracking-[0.14em] text-white">
-              {worker.skill}
-            </span>
-          </StatCard>
+          <StatCard label="Incoming Bookings" value={bookings.filter(b => b.status === "pending").length} />
           <StatCard label="Status">
             <button
               type="button"
@@ -240,13 +226,64 @@ export default function DashboardPage() {
           </StatCard>
         </section>
 
+        {/* Bookings Section */}
+        <section className="mt-6 rounded-[28px] bg-white p-7 shadow-localjob sm:p-8">
+          <h2 className="display-heading text-[2.4rem] mb-6">Recent Bookings</h2>
+          <div className="space-y-4">
+            {bookings.map(booking => (
+              <div key={booking.id} className="flex items-center justify-between rounded-2xl border border-black/5 p-5">
+                <div>
+                  <p className="font-bold">Booking #{booking.id.slice(0, 5)}</p>
+                  <p className="text-xs text-muted">{booking.date?.toDate().toLocaleDateString()} at {booking.timeSlot}</p>
+                  <p className="text-sm mt-1 font-bold text-crimson">₹{booking.price}</p>
+                  <div className="mt-2 rounded-lg bg-[#f7f3ef] p-2">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-black/40">Service Address</p>
+                    <p className="text-xs text-ink mt-0.5">{booking.address}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {booking.status === "pending" ? (
+                    <>
+                      <button onClick={() => handleBookingStatus(booking.id, "confirmed")} className="text-xs font-bold uppercase text-green-600 hover:underline">Accept</button>
+                      <button onClick={() => handleBookingStatus(booking.id, "cancelled")} className="text-xs font-bold uppercase text-red-600 hover:underline">Decline</button>
+                    </>
+                  ) : (
+                    <span className="text-xs font-bold uppercase text-muted">{booking.status}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+            {bookings.length === 0 && <p className="text-center text-muted italic py-8">No bookings yet.</p>}
+          </div>
+        </section>
+
+        {/* Reviews Section */}
+        <section className="mt-6 rounded-[28px] bg-white p-7 shadow-localjob sm:p-8">
+          <h2 className="display-heading text-[2.4rem] mb-6">Customer Feedback</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {reviews.map(review => (
+              <div key={review.id} className="rounded-2xl border border-black/5 p-5 bg-[#fcfbf9]">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="font-bold text-sm">{review.customerName}</p>
+                    <div className="flex text-yellow-400 text-[10px] mt-0.5">
+                      {"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}
+                    </div>
+                  </div>
+                  <span className="text-[10px] text-muted">{review.createdAt?.toDate().toLocaleDateString()}</span>
+                </div>
+                <p className="mt-3 text-xs text-muted leading-relaxed line-clamp-3">{review.comment}</p>
+              </div>
+            ))}
+            {reviews.length === 0 && <p className="col-span-full text-center text-muted italic py-8">No reviews yet.</p>}
+          </div>
+        </section>
+
         <section className="mt-6 rounded-[28px] bg-white p-7 shadow-localjob sm:p-8">
           <div className="flex flex-col gap-4 border-b border-black/10 pb-6 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <h2 className="display-heading text-[3rem] text-ink">{worker.name}</h2>
-              <p className="mt-3 text-sm leading-6 text-muted">
-                {worker.area}, {worker.city}
-              </p>
+              <h2 className="display-heading text-[2.4rem] text-ink">Listing Details</h2>
+              <p className="mt-2 text-sm text-muted">Approval Status: <span className="font-bold capitalize">{worker.approvalStatus}</span></p>
             </div>
 
             <div className="flex flex-wrap gap-3">
@@ -255,7 +292,7 @@ export default function DashboardPage() {
                 onClick={() => setEditing((current) => !current)}
                 className="pill-button-secondary"
               >
-                {editing ? "Close Edit" : "Edit"}
+                {editing ? "Close Edit" : "Edit Details"}
               </button>
               <button
                 type="button"
@@ -279,6 +316,7 @@ export default function DashboardPage() {
                   bio: worker.bio,
                   experience: worker.experience,
                   available: worker.available,
+                  packages: worker.packages || [],
                 }}
                 submitLabel="Save Changes"
                 onSubmit={handleUpdate}
@@ -289,44 +327,33 @@ export default function DashboardPage() {
           ) : (
             <div className="mt-6 grid gap-6 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Skill
-                </p>
-                <p className="mt-3 text-base font-medium text-ink">{worker.skill}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">Skill</p>
+                <p className="mt-2 text-base font-medium text-ink">{worker.skill}</p>
               </div>
-
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Experience
-                </p>
-                <p className="mt-3 text-base font-medium text-ink">{worker.experience}</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">Experience</p>
+                <p className="mt-2 text-base font-medium text-ink">{worker.experience}</p>
               </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Contact
-                </p>
-                <p className="mt-3 text-base font-medium text-ink">{worker.phone}</p>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Status
-                </p>
-                <p className="mt-3 text-base font-medium text-ink">
-                  {worker.available ? "Available for work" : "Currently busy"}
-                </p>
-              </div>
-
               <div className="sm:col-span-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">
-                  Bio
-                </p>
-                <p className="mt-3 max-w-2xl text-base leading-7 text-muted">
-                  {worker.bio || "No bio added yet."}
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">Bio</p>
+                <p className="mt-2 text-base leading-7 text-muted">{worker.bio || "No bio added yet."}</p>
               </div>
-
+              {worker.packages && worker.packages.length > 0 && (
+                <div className="sm:col-span-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-black/45">Service Packages</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {worker.packages.map((pkg) => (
+                      <div key={pkg.id} className="rounded-xl border border-black/5 bg-offwhite p-4">
+                        <div className="flex justify-between font-bold text-sm">
+                          <span>{pkg.name}</span>
+                          <span className="text-crimson">₹{pkg.price}</span>
+                        </div>
+                        <p className="mt-1 text-xs text-muted">{pkg.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="sm:col-span-2">
                 <Link href={`/find/${worker.id}`} className="text-sm font-medium text-crimson">
                   Preview public profile →
@@ -337,7 +364,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {showDeleteConfirm ? (
+      {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-5">
           <div className="w-full max-w-md rounded-[24px] bg-white p-6 shadow-localjob">
             <h2 className="text-2xl font-bold text-ink">Are you sure?</h2>
@@ -363,7 +390,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-      ) : null}
+      )}
     </div>
   );
 }

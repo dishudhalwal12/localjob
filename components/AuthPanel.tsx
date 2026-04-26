@@ -15,6 +15,7 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
   const [tab, setTab] = useState<AuthTab>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [role, setRole] = useState<"worker" | "customer">("customer");
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async () => {
@@ -30,7 +31,7 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
         await signInWorker(email.trim(), password);
         toast.success("Signed in successfully.");
       } else {
-        await registerWorker(email.trim(), password);
+        await registerWorker(email.trim(), password, role);
         toast.success("Account created successfully.");
       }
 
@@ -78,10 +79,10 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
 
       <div className="mt-5">
         <h2 className="text-2xl font-bold text-ink">
-          {tab === "login" ? "Log in to list yourself" : "Create your worker account"}
+          {tab === "login" ? "Welcome back" : "Create your account"}
         </h2>
         <p className="mt-2 text-sm leading-6 text-muted">
-          Only workers need an account. Visitors can browse freely without signing in.
+          Access your bookings, messages, and profile.
         </p>
       </div>
 
@@ -111,6 +112,28 @@ export function AuthPanel({ onSuccess }: AuthPanelProps) {
             placeholder="At least 6 characters"
           />
         </div>
+
+        {tab === "register" && (
+          <div>
+            <label className="mb-2 block text-[13px] font-medium uppercase tracking-[0.08em] text-black/55">
+              I am a
+            </label>
+            <div className="flex gap-2 rounded-xl bg-[#f7f3ef] p-1">
+              {(["customer", "worker"] as const).map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRole(r)}
+                  className={`flex-1 rounded-lg px-4 py-2 text-xs font-semibold capitalize transition ${
+                    role === r ? "bg-white text-crimson shadow-sm" : "text-black/55"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <button

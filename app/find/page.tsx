@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { SearchBar } from "@/components/SearchBar";
 import { SkillFilter } from "@/components/SkillFilter";
+import { LocationIcon } from "@/components/Icons";
 import { WorkerCard } from "@/components/WorkerCard";
 import { useWorkers } from "@/hooks/useWorkers";
 import type { WorkerSkillFilter } from "@/types";
@@ -30,7 +31,8 @@ function WorkerCardSkeleton() {
 export default function FindWorkersPage() {
   const [search, setSearch] = useState("");
   const [skill, setSkill] = useState<WorkerSkillFilter>("All");
-  const { workers, loading, error } = useWorkers({ search, skill });
+  const [sortByDistance, setSortByDistance] = useState(false);
+  const { workers, loading, error, userLocation } = useWorkers({ search, skill, sortByDistance });
 
   return (
     <div className="bg-offwhite">
@@ -50,8 +52,19 @@ export default function FindWorkersPage() {
           <div className="lg:max-w-md lg:flex-1">
             <SearchBar value={search} onChange={setSearch} />
           </div>
-          <div className="lg:flex-[1.5]">
-            <SkillFilter value={skill} onChange={setSkill} />
+          <div className="flex flex-1 items-center gap-4">
+            <div className="flex-1">
+              <SkillFilter value={skill} onChange={setSkill} />
+            </div>
+            <button
+              onClick={() => setSortByDistance(!sortByDistance)}
+              className={`flex h-12 items-center gap-2 rounded-xl border px-4 text-sm font-bold transition ${
+                sortByDistance ? "border-crimson bg-crimson/5 text-crimson" : "border-black/10 hover:border-black/20"
+              }`}
+            >
+              <LocationIcon className="h-4 w-4" />
+              <span>{sortByDistance ? "Nearest" : "Nearby"}</span>
+            </button>
           </div>
         </div>
       </section>
